@@ -7,7 +7,7 @@
   <style>.hidden {display:none !important;}</style>
 </head>
 <body>
-  <!-- VERSION: 2025-11-03-1 -->
+  <!-- VERSION: 2025-11-03-2 -->
   <div class="page">
     <h1 class="title">모의고사 진단지 생성기</h1>
 
@@ -29,7 +29,7 @@
             <h3>📄 새 파일 만들기</h3><p>정답을 입력하고 여러 학생을 등록합니다.</p>
           </div>
           <div class="mode-card" onclick="selectMode('add')">
-            <h3>➕ 기존 파일에 학생 추가</h3><p>기존 엑셀에 학생을 더합니다.</p>
+            <h3>➕ 기존 파일에 학생 추가</h3><p>업로드한 엑셀에 학생을 더합니다.</p>
           </div>
         </div>
       </div>
@@ -49,32 +49,66 @@
             </select>
           </div>
           <div>
-            <label>년도</label>
+            <label>학년도(예: 2025)</label>
             <input type="number" name="year" value="{{ form_data.year if form_data else 2025 }}">
           </div>
           <div>
             <label>월</label>
             <input type="number" name="month" value="{{ form_data.month if form_data else 11 }}">
           </div>
+          <div>
+            <label>레벨</label>
+            <select name="level">
+              {% set lv = (form_data.level if form_data else '실전') %}
+              <option value="입문" {{ 'selected' if lv=='입문' else '' }}>입문</option>
+              <option value="기본" {{ 'selected' if lv=='기본' else '' }}>기본</option>
+              <option value="실전" {{ 'selected' if lv=='실전' else '' }}>실전</option>
+            </select>
+          </div>
+          <div>
+            <label>회차 (1~12)</label>
+            <select name="round">
+              {% set rd = (form_data.round if form_data else '1') %}
+              {% for i in range(1,13) %}
+              <option value="{{ i }}" {{ 'selected' if rd==i|string else '' }}>{{ i }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
 
         <div class="cat-box">
-          <p class="small-title">카테고리 선택</p>
+          <p class="small-title">카테고리 선택 & 범위(문항)</p>
           <label class="chk"><input type="checkbox" name="categories" value="공통" id="cat-common"> 공통</label>
+          <span id="rng-common" class="hidden">
+            <input type="number" name="answers_공통_start" min="1" max="45" value="1" style="width:80px"> ~
+            <input type="number" name="answers_공통_end" min="1" max="45" value="45" style="width:80px">
+          </span>
+          <br>
+
           <label class="chk"><input type="checkbox" name="categories" value="화작" id="cat-hwajak"> 화작</label>
+          <span id="rng-h" class="hidden">
+            <input type="number" name="answers_화작_start" min="1" max="45" value="1" style="width:80px"> ~
+            <input type="number" name="answers_화작_end" min="1" max="45" value="45" style="width:80px">
+          </span>
+          <br>
+
           <label class="chk"><input type="checkbox" name="categories" value="언매" id="cat-eonmae"> 언매</label>
+          <span id="rng-e" class="hidden">
+            <input type="number" name="answers_언매_start" min="1" max="45" value="1" style="width:80px"> ~
+            <input type="number" name="answers_언매_end" min="1" max="45" value="45" style="width:80px">
+          </span>
         </div>
 
         <div class="answers-box" id="answers-common" style="display:none;">
-          <label>공통 정답 (1~45)</label>
+          <label>공통 정답 (범위 개수만큼)</label>
           <textarea name="answers_공통" rows="3" placeholder="예: 1 3 4 ... 또는 15234 형식 가능"></textarea>
         </div>
         <div class="answers-box" id="answers-hwajak" style="display:none;">
-          <label>화작 정답 (1~45)</label>
+          <label>화작 정답 (범위 개수만큼)</label>
           <textarea name="answers_화작" rows="3" placeholder="예: 1 3 4 ... 또는 15234 형식 가능"></textarea>
         </div>
         <div class="answers-box" id="answers-eonmae" style="display:none;">
-          <label>언매 정답 (1~45)</label>
+          <label>언매 정답 (범위 개수만큼)</label>
           <textarea name="answers_언매" rows="3" placeholder="예: 1 3 4 ... 또는 15234 형식 가능"></textarea>
         </div>
 
@@ -96,11 +130,13 @@
       <div id="step-add" class="card hidden">
         <h2>기존 파일에 학생 추가</h2>
         <input type="file" name="excel_file" accept=".xlsx">
+
         <label>학생 수</label>
         <select name="add_student_count" id="addStudentCount" onchange="buildStudentInputs('add')">
           <option value="0">0명</option>
           {% for i in range(1,11) %}<option value="{{ i }}">{{ i }}명</option>{% endfor %}
         </select>
+
         <div id="add-student-wrapper" class="students-wrapper"></div>
         <div class="actions">
           <button type="button" class="btn-secondary" onclick="backToMode()">뒤로</button>
@@ -111,12 +147,12 @@
   </div>
 
   <script>
-    // 초기 상태 숨기기
+    // 초기/토글
     document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("step-new").classList.add("hidden");
       document.getElementById("step-add").classList.add("hidden");
 
-      // 체크박스 연동 로직
+      // 체크박스 연동
       const c = document.getElementById("cat-common");
       const h = document.getElementById("cat-hwajak");
       const e = document.getElementById("cat-eonmae");
@@ -125,21 +161,22 @@
       const answersH = document.getElementById("answers-hwajak");
       const answersE = document.getElementById("answers-eonmae");
 
+      const rngCommon = document.getElementById("rng-common");
+      const rngH = document.getElementById("rng-h");
+      const rngE = document.getElementById("rng-e");
+
       function updateVisibility(){
         answersCommon.style.display = c.checked ? "block" : "none";
         answersH.style.display = h.checked ? "block" : "none";
         answersE.style.display = e.checked ? "block" : "none";
+        rngCommon.classList.toggle("hidden", !c.checked);
+        rngH.classList.toggle("hidden", !h.checked);
+        rngE.classList.toggle("hidden", !e.checked);
       }
 
-      // 화작/언매는 "쌍"으로 동작: 체크/해제 모두 동기화
-      h.addEventListener("change", () => {
-        e.checked = h.checked;
-        updateVisibility();
-      });
-      e.addEventListener("change", () => {
-        h.checked = e.checked;
-        updateVisibility();
-      });
+      // 화작/언매는 쌍으로 동작
+      h.addEventListener("change", () => { e.checked = h.checked; updateVisibility(); });
+      e.addEventListener("change", () => { h.checked = e.checked; updateVisibility(); });
       c.addEventListener("change", updateVisibility);
 
       updateVisibility();
@@ -157,9 +194,11 @@
       document.getElementById("step-new").classList.add("hidden");
       document.getElementById("step-add").classList.add("hidden");
     }
+
+    // 학생 입력 UI 생성 (범위 추가)
     function buildStudentInputs(p){
-      const c=parseInt(document.getElementById(p==="new"?"newStudentCount":"addStudentCount").value);
-      const w=document.getElementById(p==="new"?"new-student-wrapper":"add-student-wrapper");
+      const c = parseInt(document.getElementById(p==="new"?"newStudentCount":"addStudentCount").value);
+      const w = document.getElementById(p==="new"?"new-student-wrapper":"add-student-wrapper");
       w.innerHTML="";
       for(let i=1;i<=c;i++){
         w.innerHTML+=`
@@ -173,9 +212,16 @@
             <option value="화작">화작</option>
             <option value="언매">언매</option>
           </select>
-          <label>답안 (1~45)</label>
-          <textarea name="${p}_student_${i}_answers" rows="2" placeholder="1 2 3 4 5 ... 또는 15234 형식 가능"></textarea>
-        </div>`;}
+          <div style="display:flex;gap:8px;align-items:center;margin:6px 0 2px;">
+            <span style="color:#9fb0c3;font-size:12px;">문항 범위</span>
+            <input type="number" name="${p}_student_${i}_start" min="1" max="45" value="1" style="width:80px">
+            ~
+            <input type="number" name="${p}_student_${i}_end" min="1" max="45" value="45" style="width:80px">
+          </div>
+          <label>답안 (범위 개수만큼)</label>
+          <textarea name="${p}_student_${i}_answers" rows="2" placeholder="1 2 3 ... 또는 15234 형식"></textarea>
+        </div>`;
+      }
     }
   </script>
 </body>
