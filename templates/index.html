@@ -7,6 +7,7 @@
   <style>.hidden {display:none !important;}</style>
 </head>
 <body>
+  <!-- VERSION: 2025-11-03-1 -->
   <div class="page">
     <h1 class="title">모의고사 진단지 생성기</h1>
 
@@ -130,7 +131,7 @@
         answersE.style.display = e.checked ? "block" : "none";
       }
 
-      // 화작/언매는 "쌍으로" 동작: 하나를 체크/해제하면 다른 하나도 동일하게
+      // 화작/언매는 서로 연결된 쌍으로 동작 (체크/해제 모두 동기화)
       h.addEventListener("change", () => {
         e.checked = h.checked;
         updateVisibility();

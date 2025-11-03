@@ -9,6 +9,10 @@ import re
 app = Flask(__name__)
 app.secret_key = "mock-exam-secret"
 
+# ===== 캐시 무력화 설정 (URL 그대로 유지) =====
+app.config["TEMPLATES_AUTO_RELOAD"] = True               # 템플릿 변경 즉시 반영
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0              # 정적 파일 캐시 기간 0
+
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -54,6 +58,20 @@ def build_new_workbook(grade, year, month, category_answers: dict):
     filename = f"고{grade} {year}년 {month}월 모의고사 진단지.xlsx"
     wb.save(filename)
     return filename
+
+
+@app.after_request
+def add_no_cache_headers(resp):
+    """
+    주소는 유지한 채 브라우저/프록시 캐시를 비활성화.
+    HTML/JS/CSS/JSON 등 문서형 응답에 no-store 헤더 부여.
+    """
+    if resp.mimetype in ("text/html", "application/javascript", "text/javascript",
+                         "text/css", "application/json"):
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.route("/", methods=["GET", "POST"])
