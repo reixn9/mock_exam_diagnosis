@@ -14,7 +14,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 def parse_answers(text: str):
-    """공백, 줄바꿈, 붙여쓰기, 콤마 모두 처리해서 1~5만 추출"""
+    """공백/줄바꿈/콤마/붙여쓰기 모두 허용, 1~5만 추출하여 45개 검증용 리스트로 반환"""
     if not text:
         return []
     tokens = re.split(r"[\s,]+", text.strip())
@@ -26,7 +26,7 @@ def parse_answers(text: str):
 
 
 def append_student_to_sheet(ws, student_name, student_answers):
-    """시트에 학생 1명 추가 (옆으로 확장)"""
+    """시트에 학생 1명 추가 (옆으로 확장) + 오답 노란색 표시"""
     yellow = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
     target_col = ws.max_column + 1
     ws.cell(row=1, column=target_col, value=student_name)
@@ -38,8 +38,8 @@ def append_student_to_sheet(ws, student_name, student_answers):
             cell.fill = yellow
 
 
-def build_new_workbook(year, month, category_answers: dict):
-    """새 엑셀 파일 생성"""
+def build_new_workbook(grade, year, month, category_answers: dict):
+    """새 엑셀 파일 생성 (선택한 카테고리만 시트 생성)"""
     wb = Workbook()
     wb.remove(wb.active)
 
@@ -51,7 +51,7 @@ def build_new_workbook(year, month, category_answers: dict):
             ws.cell(row=i + 1, column=1, value=i)
             ws.cell(row=i + 1, column=2, value=ans)
 
-    filename = f"고3 {year}년 {month}월 모의고사 진단지.xlsx"
+    filename = f"고{grade} {year}년 {month}월 모의고사 진단지.xlsx"
     wb.save(filename)
     return filename
 
@@ -61,11 +61,11 @@ def index():
     if request.method == "POST":
         mode = request.form.get("mode")
 
-        # =========================================================
+        # ===========================
         # 1) 새 파일 만들기
-        # =========================================================
+        # ===========================
         if mode == "new":
-            grade = "3"  # 고정
+            grade = (request.form.get("grade") or "").strip()
             year = request.form.get("year")
             month = request.form.get("month")
             selected_cats = request.form.getlist("categories")
@@ -73,7 +73,11 @@ def index():
 
             errors = []
 
-            # 카테고리 규칙 검사
+            # 학년 검증
+            if grade not in {"1", "2", "3"}:
+                errors.append("학년(고1/고2/고3)을 선택하세요.")
+
+            # 카테고리 규칙: 화작↔언매는 함께, 공통은 독립 선택 가능
             if not selected_cats:
                 errors.append("최소 한 개의 카테고리를 선택해야 합니다.")
             if "화작" in selected_cats and "언매" not in selected_cats:
@@ -81,7 +85,7 @@ def index():
             if "언매" in selected_cats and "화작" not in selected_cats:
                 errors.append("언매를 선택하면 화작 정답도 입력해야 합니다.")
 
-            # 정답 입력 확인
+            # 정답 입력 파싱/검증
             category_answers = {}
             for cat in ["공통", "화작", "언매"]:
                 if cat in selected_cats:
@@ -94,7 +98,7 @@ def index():
                         errors.append(f"{cat} 정답에 1~5가 아닌 값이 있습니다: {', '.join(sorted(set(bad)))}")
                     category_answers[cat] = parsed
 
-            # 학생 입력 처리
+            # 학생 입력 파싱/검증
             students = []
             for i in range(1, student_count + 1):
                 name = request.form.get(f"new_student_{i}_name", "").strip()
@@ -110,6 +114,7 @@ def index():
                     errors.append(f"{i}번 학생 답안에 1~5가 아닌 값이 있습니다: {', '.join(sorted(set(bad)))}")
                 students.append({"name": name, "category": cat, "answers": parsed})
 
+            # 학생이 선택한 카테고리에 해당 정답이 있어야 함
             for s in students:
                 if s["category"] and s["category"] not in category_answers:
                     errors.append(f"학생 '{s['name']}'이(가) 선택한 '{s['category']}' 카테고리는 정답이 입력되지 않았습니다.")
@@ -118,7 +123,7 @@ def index():
                 return render_template("index.html", error_messages=errors, last_mode="new", form_data=request.form)
 
             # 엑셀 생성 및 학생 추가
-            filename = build_new_workbook(year, month, category_answers)
+            filename = build_new_workbook(grade, year, month, category_answers)
             wb = load_workbook(filename)
             for s in students:
                 if not s["name"] or not s["answers"]:
@@ -128,9 +133,9 @@ def index():
             wb.save(filename)
             return send_file(filename, as_attachment=True)
 
-        # =========================================================
+        # ===========================
         # 2) 기존 파일에 학생 추가
-        # =========================================================
+        # ===========================
         elif mode == "add":
             uploaded = request.files.get("excel_file")
             student_count = int(request.form.get("add_student_count", 0))
@@ -192,5 +197,5 @@ def index():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
-
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
