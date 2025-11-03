@@ -131,7 +131,7 @@
         answersE.style.display = e.checked ? "block" : "none";
       }
 
-      // 화작/언매는 서로 연결된 쌍으로 동작 (체크/해제 모두 동기화)
+      // 화작/언매는 "쌍"으로 동작: 체크/해제 모두 동기화
       h.addEventListener("change", () => {
         e.checked = h.checked;
         updateVisibility();

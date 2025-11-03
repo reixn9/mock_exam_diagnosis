@@ -9,9 +9,9 @@ import re
 app = Flask(__name__)
 app.secret_key = "mock-exam-secret"
 
-# ===== 캐시 무력화 설정 (URL 그대로 유지) =====
-app.config["TEMPLATES_AUTO_RELOAD"] = True               # 템플릿 변경 즉시 반영
-app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0              # 정적 파일 캐시 기간 0
+# ===== 캐시 무력화 (주소 그대로 유지해도 최신 반영) =====
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -25,12 +25,12 @@ def parse_answers(text: str):
     tokens = [t for t in tokens if t]
     joined = "".join(tokens)
     if joined and all(ch in "12345" for ch in joined):
-        return list(joined)
+        return list(joined)  # 붙여쓰기 전체가 1~5면 각 글자로 분할
     return tokens
 
 
 def append_student_to_sheet(ws, student_name, student_answers):
-    """시트에 학생 1명 추가 (옆으로 확장) + 오답 노란색 표시"""
+    """시트에 학생 1명 추가 (오른쪽으로 확장) + 오답 노란색 표시"""
     yellow = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
     target_col = ws.max_column + 1
     ws.cell(row=1, column=target_col, value=student_name)
@@ -62,16 +62,19 @@ def build_new_workbook(grade, year, month, category_answers: dict):
 
 @app.after_request
 def add_no_cache_headers(resp):
-    """
-    주소는 유지한 채 브라우저/프록시 캐시를 비활성화.
-    HTML/JS/CSS/JSON 등 문서형 응답에 no-store 헤더 부여.
-    """
+    """문서형 응답 캐시 비활성화 (주소 고정 상태에서도 최신 반영)"""
     if resp.mimetype in ("text/html", "application/javascript", "text/javascript",
                          "text/css", "application/json"):
         resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Expires"] = "0"
     return resp
+
+
+# === 배포/캐시 진단용 버전 엔드포인트 ===
+@app.route("/_version")
+def _version():
+    return "VERSION: 2025-11-03-1"
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -215,5 +218,6 @@ def index():
 
 
 if __name__ == "__main__":
+    # Render/클라우드 환경에서 동적 포트 사용
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
