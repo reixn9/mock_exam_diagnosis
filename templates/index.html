@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>모의고사 진단지 생성기</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>.hidden {display:none !important;}</style>
+</head>
+<body>
+  <div class="page">
+    <h1 class="title">모의고사 진단지 생성기</h1>
+
+    {% if error_messages %}
+    <div class="alert alert-error">
+      <strong>입력 오류가 있어요.</strong>
+      <ul>{% for e in error_messages %}<li>{{ e }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" id="mainForm">
+      <input type="hidden" name="mode" id="modeInput" value="{{ last_mode or 'none' }}">
+
+      <!-- STEP 0 -->
+      <div id="step-mode" class="card">
+        <p class="subtitle">무엇을 할까요?</p>
+        <div class="mode-grid">
+          <div class="mode-card" onclick="selectMode('new')">
+            <h3>📄 새 파일 만들기</h3><p>정답을 입력하고 여러 학생을 등록합니다.</p>
+          </div>
+          <div class="mode-card" onclick="selectMode('add')">
+            <h3>➕ 기존 파일에 학생 추가</h3><p>기존 엑셀에 학생을 더합니다.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP NEW -->
+      <div id="step-new" class="card hidden">
+        <h2>새 파일 만들기</h2>
+
+        <div class="grid-2">
+          <div>
+            <label>학년</label>
+            <input type="text" value="고3" readonly style="background:#f1f5f9;">
+          </div>
+          <div>
+            <label>년도</label>
+            <input type="number" name="year" value="{{ form_data.year if form_data else 2025 }}">
+          </div>
+          <div>
+            <label>월</label>
+            <input type="number" name="month" value="{{ form_data.month if form_data else 11 }}">
+          </div>
+        </div>
+
+        <div class="cat-box">
+          <p class="small-title">카테고리 선택</p>
+          <label class="chk"><input type="checkbox" name="categories" value="공통" id="cat-common" onchange="handleCategoryRule()"> 공통</label>
+          <label class="chk"><input type="checkbox" name="categories" value="화작" id="cat-hwajak" onchange="handleCategoryRule()"> 화작</label>
+          <label class="chk"><input type="checkbox" name="categories" value="언매" id="cat-eonmae" onchange="handleCategoryRule()"> 언매</label>
+        </div>
+
+        <div class="answers-box" id="answers-common" style="display:none;">
+          <label>공통 정답 (1~45)</label>
+          <textarea name="answers_공통" rows="3"></textarea>
+        </div>
+        <div class="answers-box" id="answers-hwajak" style="display:none;">
+          <label>화작 정답 (1~45)</label>
+          <textarea name="answers_화작" rows="3"></textarea>
+        </div>
+        <div class="answers-box" id="answers-eonmae" style="display:none;">
+          <label>언매 정답 (1~45)</label>
+          <textarea name="answers_언매" rows="3"></textarea>
+        </div>
+
+        <hr>
+        <label>학생 수</label>
+        <select name="new_student_count" id="newStudentCount" onchange="buildStudentInputs('new')">
+          <option value="0">0명</option>
+          {% for i in range(1,11) %}<option value="{{ i }}">{{ i }}명</option>{% endfor %}
+        </select>
+
+        <div id="new-student-wrapper" class="students-wrapper"></div>
+        <div class="actions">
+          <button type="button" class="btn-secondary" onclick="backToMode()">뒤로</button>
+          <button type="submit" class="btn-primary">엑셀 만들기</button>
+        </div>
+      </div>
+
+      <!-- STEP ADD -->
+      <div id="step-add" class="card hidden">
+        <h2>기존 파일에 학생 추가</h2>
+        <input type="file" name="excel_file" accept=".xlsx">
+        <label>학생 수</label>
+        <select name="add_student_count" id="addStudentCount" onchange="buildStudentInputs('add')">
+          <option value="0">0명</option>
+          {% for i in range(1,11) %}<option value="{{ i }}">{{ i }}명</option>{% endfor %}
+        </select>
+        <div id="add-student-wrapper" class="students-wrapper"></div>
+        <div class="actions">
+          <button type="button" class="btn-secondary" onclick="backToMode()">뒤로</button>
+          <button type="submit" class="btn-primary">엑셀에 추가</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("step-new").classList.add("hidden");
+      document.getElementById("step-add").classList.add("hidden");
+    });
+
+    function selectMode(m){document.getElementById("modeInput").value=m;showStep(m);}
+    function showStep(m){
+      document.getElementById("step-mode").classList.add("hidden");
+      document.getElementById("step-new").classList.toggle("hidden", m!=="new");
+      document.getElementById("step-add").classList.toggle("hidden", m!=="add");
+    }
+    function backToMode(){
+      document.getElementById("modeInput").value="none";
+      document.getElementById("step-mode").classList.remove("hidden");
+      document.getElementById("step-new").classList.add("hidden");
+      document.getElementById("step-add").classList.add("hidden");
+    }
+    function handleCategoryRule(){
+      const c=document.getElementById("cat-common"),
+            h=document.getElementById("cat-hwajak"),
+            e=document.getElementById("cat-eonmae");
+      if(h.checked&&!e.checked)e.checked=true;
+      if(e.checked&&!h.checked)h.checked=true;
+      document.getElementById("answers-common").style.display=c.checked?"block":"none";
+      document.getElementById("answers-hwajak").style.display=h.checked?"block":"none";
+      document.getElementById("answers-eonmae").style.display=e.checked?"block":"none";
+    }
+    function buildStudentInputs(p){
+      const c=parseInt(document.getElementById(p==="new"?"newStudentCount":"addStudentCount").value);
+      const w=document.getElementById(p==="new"?"new-student-wrapper":"add-student-wrapper");
+      w.innerHTML="";
+      for(let i=1;i<=c;i++){
+        w.innerHTML+=`
+        <div class="student-box">
+          <p class="student-title">${i}번 학생</p>
+          <label>이름</label>
+          <input type="text" name="${p}_student_${i}_name" placeholder="예: 김민수">
+          <label>카테고리</label>
+          <select name="${p}_student_${i}_category">
+            <option value="공통">공통</option>
+            <option value="화작">화작</option>
+            <option value="언매">언매</option>
+          </select>
+          <label>답안 (1~45)</label>
+          <textarea name="${p}_student_${i}_answers" rows="2" placeholder="1 2 3 4 5 ... 또는 15234 형식 가능"></textarea>
+        </div>`;}
+    }
+  </script>
+</body>
+</html>
