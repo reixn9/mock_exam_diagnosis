@@ -1,228 +1,106 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>모의고사 진단지 생성기</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <style>.hidden {display:none !important;}</style>
+  <style>.hidden{display:none!important}</style>
 </head>
 <body>
-  <!-- VERSION: 2025-11-03-2 -->
-  <div class="page">
-    <h1 class="title">모의고사 진단지 생성기</h1>
+<!-- VERSION: 2025-11-04-1 -->
+<h1>모의고사 진단지 생성기</h1>
 
-    {% if error_messages %}
-    <div class="alert alert-error">
-      <strong>입력 오류가 있어요.</strong>
-      <ul>{% for e in error_messages %}<li>{{ e }}</li>{% endfor %}</ul>
-    </div>
-    {% endif %}
+{% if error_messages %}
+<div style="color:red;border:1px solid red;padding:10px;">
+  <strong>입력 오류:</strong>
+  <ul>{% for e in error_messages %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
 
-    <form method="post" enctype="multipart/form-data" id="mainForm">
-      <input type="hidden" name="mode" id="modeInput" value="{{ last_mode or 'none' }}">
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="mode" id="modeInput" value="{{ last_mode or 'none' }}">
 
-      <!-- STEP 0 -->
-      <div id="step-mode" class="card">
-        <p class="subtitle">무엇을 할까요?</p>
-        <div class="mode-grid">
-          <div class="mode-card" onclick="selectMode('new')">
-            <h3>📄 새 파일 만들기</h3><p>정답을 입력하고 여러 학생을 등록합니다.</p>
-          </div>
-          <div class="mode-card" onclick="selectMode('add')">
-            <h3>➕ 기존 파일에 학생 추가</h3><p>업로드한 엑셀에 학생을 더합니다.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- STEP NEW -->
-      <div id="step-new" class="card hidden">
-        <h2>새 파일 만들기</h2>
-
-        <div class="grid-2">
-          <div>
-            <label>학년</label>
-            <select name="grade">
-              {% set g = (form_data.grade if form_data else '3') %}
-              <option value="1" {{ 'selected' if g=='1' else '' }}>고1</option>
-              <option value="2" {{ 'selected' if g=='2' else '' }}>고2</option>
-              <option value="3" {{ 'selected' if g=='3' else '' }}>고3</option>
-            </select>
-          </div>
-          <div>
-            <label>학년도(예: 2025)</label>
-            <input type="number" name="year" value="{{ form_data.year if form_data else 2025 }}">
-          </div>
-          <div>
-            <label>월</label>
-            <input type="number" name="month" value="{{ form_data.month if form_data else 11 }}">
-          </div>
-          <div>
-            <label>레벨</label>
-            <select name="level">
-              {% set lv = (form_data.level if form_data else '실전') %}
-              <option value="입문" {{ 'selected' if lv=='입문' else '' }}>입문</option>
-              <option value="기본" {{ 'selected' if lv=='기본' else '' }}>기본</option>
-              <option value="실전" {{ 'selected' if lv=='실전' else '' }}>실전</option>
-            </select>
-          </div>
-          <div>
-            <label>회차 (1~12)</label>
-            <select name="round">
-              {% set rd = (form_data.round if form_data else '1') %}
-              {% for i in range(1,13) %}
-              <option value="{{ i }}" {{ 'selected' if rd==i|string else '' }}>{{ i }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-
-        <div class="cat-box">
-          <p class="small-title">카테고리 선택 & 범위(문항)</p>
-          <label class="chk"><input type="checkbox" name="categories" value="공통" id="cat-common"> 공통</label>
-          <span id="rng-common" class="hidden">
-            <input type="number" name="answers_공통_start" min="1" max="45" value="1" style="width:80px"> ~
-            <input type="number" name="answers_공통_end" min="1" max="45" value="45" style="width:80px">
-          </span>
-          <br>
-
-          <label class="chk"><input type="checkbox" name="categories" value="화작" id="cat-hwajak"> 화작</label>
-          <span id="rng-h" class="hidden">
-            <input type="number" name="answers_화작_start" min="1" max="45" value="1" style="width:80px"> ~
-            <input type="number" name="answers_화작_end" min="1" max="45" value="45" style="width:80px">
-          </span>
-          <br>
-
-          <label class="chk"><input type="checkbox" name="categories" value="언매" id="cat-eonmae"> 언매</label>
-          <span id="rng-e" class="hidden">
-            <input type="number" name="answers_언매_start" min="1" max="45" value="1" style="width:80px"> ~
-            <input type="number" name="answers_언매_end" min="1" max="45" value="45" style="width:80px">
-          </span>
-        </div>
-
-        <div class="answers-box" id="answers-common" style="display:none;">
-          <label>공통 정답 (범위 개수만큼)</label>
-          <textarea name="answers_공통" rows="3" placeholder="예: 1 3 4 ... 또는 15234 형식 가능"></textarea>
-        </div>
-        <div class="answers-box" id="answers-hwajak" style="display:none;">
-          <label>화작 정답 (범위 개수만큼)</label>
-          <textarea name="answers_화작" rows="3" placeholder="예: 1 3 4 ... 또는 15234 형식 가능"></textarea>
-        </div>
-        <div class="answers-box" id="answers-eonmae" style="display:none;">
-          <label>언매 정답 (범위 개수만큼)</label>
-          <textarea name="answers_언매" rows="3" placeholder="예: 1 3 4 ... 또는 15234 형식 가능"></textarea>
-        </div>
-
-        <hr>
-        <label>학생 수</label>
-        <select name="new_student_count" id="newStudentCount" onchange="buildStudentInputs('new')">
-          <option value="0">0명</option>
-          {% for i in range(1,11) %}<option value="{{ i }}">{{ i }}명</option>{% endfor %}
-        </select>
-
-        <div id="new-student-wrapper" class="students-wrapper"></div>
-        <div class="actions">
-          <button type="button" class="btn-secondary" onclick="backToMode()">뒤로</button>
-          <button type="submit" class="btn-primary">엑셀 만들기</button>
-        </div>
-      </div>
-
-      <!-- STEP ADD -->
-      <div id="step-add" class="card hidden">
-        <h2>기존 파일에 학생 추가</h2>
-        <input type="file" name="excel_file" accept=".xlsx">
-
-        <label>학생 수</label>
-        <select name="add_student_count" id="addStudentCount" onchange="buildStudentInputs('add')">
-          <option value="0">0명</option>
-          {% for i in range(1,11) %}<option value="{{ i }}">{{ i }}명</option>{% endfor %}
-        </select>
-
-        <div id="add-student-wrapper" class="students-wrapper"></div>
-        <div class="actions">
-          <button type="button" class="btn-secondary" onclick="backToMode()">뒤로</button>
-          <button type="submit" class="btn-primary">엑셀에 추가</button>
-        </div>
-      </div>
-    </form>
+  <!-- STEP SELECT -->
+  <div id="step-mode" {% if last_mode!='none' %}class="hidden"{% endif %}>
+    <button type="button" onclick="selectMode('new')">새 파일 만들기</button>
+    <button type="button" onclick="selectMode('add')">기존 파일에 학생 추가</button>
   </div>
 
-  <script>
-    // 초기/토글
-    document.addEventListener("DOMContentLoaded", () => {
-      document.getElementById("step-new").classList.add("hidden");
-      document.getElementById("step-add").classList.add("hidden");
+  <!-- STEP NEW -->
+  <div id="step-new" {% if last_mode!='new' %}class="hidden"{% endif %}>
+    <h2>새 파일 만들기</h2>
 
-      // 체크박스 연동
-      const c = document.getElementById("cat-common");
-      const h = document.getElementById("cat-hwajak");
-      const e = document.getElementById("cat-eonmae");
+    <label>학년</label>
+    <select name="grade">
+      {% set g = form_data.grade if form_data else '3' %}
+      <option value="1" {{ 'selected' if g=='1' else '' }}>고1</option>
+      <option value="2" {{ 'selected' if g=='2' else '' }}>고2</option>
+      <option value="3" {{ 'selected' if g=='3' else '' }}>고3</option>
+    </select><br>
 
-      const answersCommon = document.getElementById("answers-common");
-      const answersH = document.getElementById("answers-hwajak");
-      const answersE = document.getElementById("answers-eonmae");
+    <label>년도</label>
+    <input type="number" name="year" value="{{ form_data.year if form_data else 2025 }}"><br>
+    <label>월</label>
+    <input type="number" name="month" value="{{ form_data.month if form_data else 11 }}"><br>
 
-      const rngCommon = document.getElementById("rng-common");
-      const rngH = document.getElementById("rng-h");
-      const rngE = document.getElementById("rng-e");
+    <label>레벨</label>
+    <select name="level" id="levelSelect" onchange="toggleSchoolInput()">
+      {% set lv = form_data.level if form_data else '실전' %}
+      <option value="입문" {{ 'selected' if lv=='입문' else '' }}>입문</option>
+      <option value="기본" {{ 'selected' if lv=='기본' else '' }}>기본</option>
+      <option value="실전" {{ 'selected' if lv=='실전' else '' }}>실전</option>
+      <option value="학교" {{ 'selected' if lv=='학교' else '' }}>학교</option>
+    </select>
+    <div id="schoolInput" {% if not form_data or form_data.level!='학교' %}class="hidden"{% endif %}>
+      <input type="text" name="school_name" placeholder="학교명 입력" value="{{ form_data.school_name if form_data else '' }}">
+    </div><br>
 
-      function updateVisibility(){
-        answersCommon.style.display = c.checked ? "block" : "none";
-        answersH.style.display = h.checked ? "block" : "none";
-        answersE.style.display = e.checked ? "block" : "none";
-        rngCommon.classList.toggle("hidden", !c.checked);
-        rngH.classList.toggle("hidden", !h.checked);
-        rngE.classList.toggle("hidden", !e.checked);
-      }
+    <label>회차</label>
+    <select name="round">
+      {% set rd = form_data.round if form_data else '1' %}
+      {% for i in range(1,13) %}
+      <option value="{{ i }}" {{ 'selected' if rd==i|string else '' }}>{{ i }}</option>
+      {% endfor %}
+    </select><br>
 
-      // 화작/언매는 쌍으로 동작
-      h.addEventListener("change", () => { e.checked = h.checked; updateVisibility(); });
-      e.addEventListener("change", () => { h.checked = e.checked; updateVisibility(); });
-      c.addEventListener("change", updateVisibility);
+    <label>카테고리 선택</label><br>
+    <input type="checkbox" name="categories" value="공통" {% if '공통' in (form_data.getlist('categories') if form_data else []) %}checked{% endif %}>공통
+    <input type="checkbox" name="categories" value="화작" {% if '화작' in (form_data.getlist('categories') if form_data else []) %}checked{% endif %}>화작
+    <input type="checkbox" name="categories" value="언매" {% if '언매' in (form_data.getlist('categories') if form_data else []) %}checked{% endif %}>언매
+    <br><br>
 
-      updateVisibility();
-    });
+    <label>공통 정답</label>
+    <textarea name="answers_공통">{{ form_data.answers_공통 if form_data else '' }}</textarea><br>
+    <label>화작 정답</label>
+    <textarea name="answers_화작">{{ form_data.answers_화작 if form_data else '' }}</textarea><br>
+    <label>언매 정답</label>
+    <textarea name="answers_언매">{{ form_data.answers_언매 if form_data else '' }}</textarea><br>
 
-    function selectMode(m){document.getElementById("modeInput").value=m;showStep(m);}
-    function showStep(m){
-      document.getElementById("step-mode").classList.add("hidden");
-      document.getElementById("step-new").classList.toggle("hidden", m!=="new");
-      document.getElementById("step-add").classList.toggle("hidden", m!=="add");
-    }
-    function backToMode(){
-      document.getElementById("modeInput").value="none";
-      document.getElementById("step-mode").classList.remove("hidden");
-      document.getElementById("step-new").classList.add("hidden");
-      document.getElementById("step-add").classList.add("hidden");
-    }
+    <label>학생 수</label>
+    <input type="number" name="new_student_count" value="{{ form_data.new_student_count if form_data else 0 }}"><br>
+    <button type="submit">엑셀 만들기</button>
+  </div>
 
-    // 학생 입력 UI 생성 (범위 추가)
-    function buildStudentInputs(p){
-      const c = parseInt(document.getElementById(p==="new"?"newStudentCount":"addStudentCount").value);
-      const w = document.getElementById(p==="new"?"new-student-wrapper":"add-student-wrapper");
-      w.innerHTML="";
-      for(let i=1;i<=c;i++){
-        w.innerHTML+=`
-        <div class="student-box">
-          <p class="student-title">${i}번 학생</p>
-          <label>이름</label>
-          <input type="text" name="${p}_student_${i}_name" placeholder="예: 김민수">
-          <label>카테고리</label>
-          <select name="${p}_student_${i}_category">
-            <option value="공통">공통</option>
-            <option value="화작">화작</option>
-            <option value="언매">언매</option>
-          </select>
-          <div style="display:flex;gap:8px;align-items:center;margin:6px 0 2px;">
-            <span style="color:#9fb0c3;font-size:12px;">문항 범위</span>
-            <input type="number" name="${p}_student_${i}_start" min="1" max="45" value="1" style="width:80px">
-            ~
-            <input type="number" name="${p}_student_${i}_end" min="1" max="45" value="45" style="width:80px">
-          </div>
-          <label>답안 (범위 개수만큼)</label>
-          <textarea name="${p}_student_${i}_answers" rows="2" placeholder="1 2 3 ... 또는 15234 형식"></textarea>
-        </div>`;
-      }
-    }
-  </script>
+  <!-- STEP ADD -->
+  <div id="step-add" {% if last_mode!='add' %}class="hidden"{% endif %}>
+    <h2>기존 파일에 학생 추가</h2>
+    <input type="file" name="excel_file" accept=".xlsx"><br>
+    <label>학생 수</label>
+    <input type="number" name="add_student_count" value="{{ form_data.add_student_count if form_data else 0 }}"><br>
+    <button type="submit">추가</button>
+  </div>
+</form>
+
+<script>
+function selectMode(m){
+  document.getElementById('modeInput').value=m;
+  document.getElementById('step-mode').classList.add('hidden');
+  document.getElementById('step-new').classList.toggle('hidden', m!=='new');
+  document.getElementById('step-add').classList.toggle('hidden', m!=='add');
+}
+function toggleSchoolInput(){
+  const lv=document.getElementById('levelSelect').value;
+  document.getElementById('schoolInput').classList.toggle('hidden', lv!=='학교');
+}
+</script>
 </body>
 </html>
